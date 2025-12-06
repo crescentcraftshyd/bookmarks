@@ -10,6 +10,9 @@ class BookmarkManager {
         this.currentPage = 1;
         this.itemsPerPage = 8;
         this.editIndex = -1;
+        this.browserPanels = [];
+        this.panelCounter = 0;
+        this.draggedCard = null;
         
         this.init();
     }
@@ -18,6 +21,7 @@ class BookmarkManager {
         this.loadBookmarks();
         this.render();
         this.attachEventListeners();
+        this.initBrowserPanels();
     }
     
     // Load bookmarks from localStorage if available
@@ -26,6 +30,57 @@ class BookmarkManager {
         if (savedBookmarks) {
             this.bookmarks = JSON.parse(savedBookmarks);
         }
+    }
+    
+    // Save configuration to file
+    saveConfiguration() {
+        const config = {
+            bookmarks: this.bookmarks,
+            browserPanels: this.browserPanels
+        };
+        
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "bookmark-config.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+        
+        this.showNotification("Configuration saved successfully!", "success");
+    }
+    
+    // Load configuration from file
+    loadConfiguration(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const config = JSON.parse(e.target.result);
+                
+                if (config.bookmarks) {
+                    this.bookmarks = config.bookmarks;
+                }
+                
+                if (config.browserPanels) {
+                    this.browserPanels = config.browserPanels;
+                    this.panelCounter = config.browserPanels.length;
+                }
+                
+                this.currentPage = 1;
+                this.saveBookmarks();
+                this.render();
+                this.renderBrowserPanels();
+                
+                this.showNotification("Configuration loaded successfully!", "success");
+            } catch (error) {
+                console.error("Error loading configuration:", error);
+                this.showNotification("Error loading configuration file", "error");
+            }
+        };
+        reader.readAsText(file);
     }
     
     // Save bookmarks to localStorage
@@ -135,6 +190,7 @@ class BookmarkManager {
         const card = document.createElement('div');
         card.className = 'card';
         card.dataset.index = index;
+        card.draggable = true;
         
         // Add ripple effect
         card.addEventListener('click', (e) => {
@@ -167,6 +223,14 @@ class BookmarkManager {
                 </div>
             </div>
         `;
+        
+        // Add drag and drop events
+        card.addEventListener('dragstart', (e) => this.handleDragStart(e, card, index));
+        card.addEventListener('dragend', (e) => this.handleDragEnd(e, card));
+        card.addEventListener('dragover', (e) => this.handleDragOver(e));
+        card.addEventListener('dragenter', (e) => this.handleDragEnter(e, card));
+        card.addEventListener('dragleave', (e) => this.handleDragLeave(e, card));
+        card.addEventListener('drop', (e) => this.handleDrop(e, card, index));
         
         return card;
     }
@@ -367,6 +431,218 @@ class BookmarkManager {
         }, 3000);
     }
     
+    // Initialize browser panels
+    initBrowserPanels() {
+        // Add initial panel
+        this.addBrowserPanel();
+    }
+    
+    // Add a new browser panel
+    addBrowserPanel(url = 'https://www.google.com') {
+        const panelId = `panel-${this.panelCounter++}`;
+        const panel = {
+            id: panelId,
+            url: url,
+            title: 'New Tab',
+            minimized: false
+        };
+        
+        this.browserPanels.push(panel);
+        this.renderBrowserPanels();
+    }
+    
+    // Remove a browser panel
+    removeBrowserPanel(panelId) {
+        this.browserPanels = this.browserPanels.filter(panel => panel.id !== panelId);
+        this.renderBrowserPanels();
+    }
+    
+    // Toggle panel minimization
+    togglePanelMinimize(panelId) {
+        const panel = this.browserPanels.find(p => p.id === panelId);
+        if (panel) {
+            panel.minimized = !panel.minimized;
+            this.renderBrowserPanels();
+        }
+    }
+    
+    // Update panel URL
+    updatePanelUrl(panelId, url) {
+        const panel = this.browserPanels.find(p => p.id === panelId);
+        if (panel) {
+            panel.url = url;
+            try {
+                const domain = new URL(url).hostname.replace('www.', '');
+                panel.title = domain.charAt(0).toUpperCase() + domain.slice(1);
+            } catch (e) {
+                panel.title = 'New Tab';
+            }
+            this.renderBrowserPanels();
+        }
+    }
+    
+    // Render browser panels
+    renderBrowserPanels() {
+        const container = document.getElementById('browserContainer');
+        container.innerHTML = '';
+        
+        if (this.browserPanels.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-window-maximize fa-3x"></i>
+                    <h3>No browser panels</h3>
+                    <p>Click "Add Panel" to create a new browsing panel</p>
+                </div>
+            `;
+            return;
+        }
+        
+        this.browserPanels.forEach(panel => {
+            const panelElement = this.createPanelElement(panel);
+            container.appendChild(panelElement);
+        });
+    }
+    
+    // Create panel element
+    createPanelElement(panel) {
+        const panelElement = document.createElement('div');
+        panelElement.className = `browser-panel ${panel.minimized ? 'minimized' : ''}`;
+        panelElement.id = panel.id;
+        
+        panelElement.innerHTML = `
+            <div class="panel-header">
+                <div class="panel-title">${this.escapeHtml(panel.title)}</div>
+                <div class="panel-controls">
+                    <button class="panel-btn minimize-btn" title="${panel.minimized ? 'Maximize' : 'Minimize'}">
+                        <i class="fas fa-${panel.minimized ? 'expand' : 'compress'}"></i>
+                    </button>
+                    <button class="panel-btn close-btn" title="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div class="panel-address-bar">
+                    <input type="text" class="panel-url" value="${this.escapeHtml(panel.url)}" placeholder="Enter website URL">
+                </div>
+                <div class="panel-iframe-container">
+                    <div class="iframe-placeholder">
+                        <p><i class="fas fa-info-circle"></i> Preview may be blocked by site security settings.</p>
+                        <p>Click <strong>Open in New Tab</strong> button to view the site.</p>
+                        <button class="btn-primary open-tab-btn" data-url="${this.escapeHtml(panel.url)}">
+                            <i class="fas fa-external-link-alt"></i> Open in New Tab
+                        </button>
+                    </div>
+                    <iframe src="${this.escapeHtml(panel.url)}" class="panel-iframe" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
+                </div>
+                <div class="panel-resizer"></div>
+            </div>
+        `;
+        
+        // Add event listener for open in new tab button
+        const openTabBtn = panelElement.querySelector('.open-tab-btn');
+        if (openTabBtn) {
+            openTabBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const url = e.target.dataset.url || e.target.closest('.open-tab-btn').dataset.url;
+                if (url) {
+                    window.open(url, '_blank');
+                }
+            });
+        }
+        
+        return panelElement;
+    }
+    
+    // Reset browser panels
+    resetBrowserPanels() {
+        this.browserPanels = [];
+        this.panelCounter = 0;
+        this.addBrowserPanel();
+    }
+    
+    // Switch tabs
+    switchTab(tabName) {
+        // Hide all tab contents
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // Remove active class from all tab buttons
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Show selected tab content
+        document.getElementById(`${tabName}Tab`).classList.add('active');
+        
+        // Set active class on clicked tab button
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // Re-render browser panels when switching to browser tab
+        if (tabName === 'browser') {
+            this.renderBrowserPanels();
+        }
+    }
+    
+    // Handle drag start
+    handleDragStart(e, card, index) {
+        this.draggedCard = card;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', card.outerHTML);
+    }
+    
+    // Handle drag end
+    handleDragEnd(e, card) {
+        card.classList.remove('dragging');
+        document.querySelectorAll('.card').forEach(c => {
+            c.classList.remove('drop-zone');
+        });
+        this.draggedCard = null;
+    }
+    
+    // Handle drag over
+    handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+    }
+    
+    // Handle drag enter
+    handleDragEnter(e, card) {
+        if (card !== this.draggedCard) {
+            card.classList.add('drop-zone');
+        }
+    }
+    
+    // Handle drag leave
+    handleDragLeave(e, card) {
+        card.classList.remove('drop-zone');
+    }
+    
+    // Handle drop
+    handleDrop(e, card, targetIndex) {
+        e.stopPropagation();
+        
+        if (this.draggedCard !== card) {
+            const sourceIndex = parseInt(this.draggedCard.dataset.index);
+            
+            // Reorder bookmarks array
+            const movedBookmark = this.bookmarks.splice(sourceIndex, 1)[0];
+            this.bookmarks.splice(targetIndex, 0, movedBookmark);
+            
+            // Save and re-render
+            this.saveBookmarks();
+            this.render();
+            
+            this.showNotification("Bookmark reordered successfully!", "success");
+        }
+        
+        card.classList.remove('drop-zone');
+        return false;
+    }
+    
     // Attach event listeners
     attachEventListeners() {
         // Add button
@@ -446,6 +722,123 @@ class BookmarkManager {
             }
         });
         
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const tabName = e.target.dataset.tab;
+                this.switchTab(tabName);
+            });
+        });
+        
+        // Browser panel controls (using event delegation)
+        document.getElementById('browserContainer').addEventListener('click', (e) => {
+            const panel = e.target.closest('.browser-panel');
+            if (!panel) return;
+            
+            const panelId = panel.id;
+            
+            // Minimize button
+            if (e.target.closest('.minimize-btn')) {
+                this.togglePanelMinimize(panelId);
+                return;
+            }
+            
+            // Close button
+            if (e.target.closest('.close-btn')) {
+                this.removeBrowserPanel(panelId);
+                return;
+            }
+        });
+        
+        // URL input handling
+        document.getElementById('browserContainer').addEventListener('keypress', (e) => {
+            if (e.target.classList.contains('panel-url') && e.key === 'Enter') {
+                const panel = e.target.closest('.browser-panel');
+                if (panel) {
+                    const panelId = panel.id;
+                    let url = e.target.value.trim();
+                    
+                    // Add protocol if missing
+                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                        url = 'https://' + url;
+                    }
+                    
+                    this.updatePanelUrl(panelId, url);
+                    
+                    // Update iframe source
+                    const iframe = panel.querySelector('.panel-iframe');
+                    if (iframe) {
+                        // For sites that block iframes, we'll show a message
+                        iframe.src = url;
+                        
+                        // Show notification about X-Frame-Options
+                        this.showNotification(
+                            "Some websites block embedding for security reasons. " +
+                            "If the site doesn't load, use the 'Open in New Tab' button.", 
+                            "info"
+                        );
+                    }
+                }
+            }
+        });
+        
+        // Add panel button
+        document.getElementById('addPanelBtn').addEventListener('click', () => {
+            this.addBrowserPanel();
+        });
+        
+        // Reset panels button
+        document.getElementById('resetPanelsBtn').addEventListener('click', () => {
+            this.resetBrowserPanels();
+        });
+        
+        // Panel resizing
+        document.getElementById('browserContainer').addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('panel-resizer')) {
+                const panel = e.target.closest('.browser-panel');
+                if (!panel) return;
+                
+                const startY = e.clientY;
+                const startHeight = panel.offsetHeight;
+                
+                const doDrag = (e) => {
+                    const newHeight = startHeight + (e.clientY - startY);
+                    if (newHeight > 200) { // Minimum height
+                        panel.style.height = newHeight + 'px';
+                    }
+                };
+                
+                const stopDrag = () => {
+                    document.removeEventListener('mousemove', doDrag);
+                    document.removeEventListener('mouseup', stopDrag);
+                };
+                
+                document.addEventListener('mousemove', doDrag);
+                document.addEventListener('mouseup', stopDrag);
+            }
+        });
+        
+        // Save configuration
+        document.getElementById('saveConfigBtn').addEventListener('click', () => {
+            this.saveConfiguration();
+        });
+        
+        // Load configuration
+        const loadConfigInput = document.createElement('input');
+        loadConfigInput.type = 'file';
+        loadConfigInput.id = 'loadConfigInput';
+        loadConfigInput.accept = '.json';
+        loadConfigInput.style.display = 'none';
+        document.body.appendChild(loadConfigInput);
+        
+        document.getElementById('loadConfigBtn').addEventListener('click', () => {
+            loadConfigInput.click();
+        });
+        
+        loadConfigInput.addEventListener('change', (e) => {
+            this.loadConfiguration(e);
+        });
+        
         // Close modals with Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -484,6 +877,10 @@ notificationStyles.textContent = `
     
     .notification-error {
         background: linear-gradient(135deg, #f44336, #da190b);
+    }
+    
+    .notification-info {
+        background: linear-gradient(135deg, #2196F3, #0b7dda);
     }
     
     .empty-state {

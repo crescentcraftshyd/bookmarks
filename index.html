@@ -15,32 +15,64 @@
             <p>Organize your favorite websites with beautiful cards</p>
         </header>
 
-        <!-- Controls -->
-        <div class="controls">
-            <button id="addBtn" class="btn-primary">
-                <i class="fas fa-plus"></i> Add New Bookmark
-            </button>
-            
-            <div class="pagination-controls">
-                <label for="itemsPerPage">Items per page:</label>
-                <select id="itemsPerPage">
-                    <option value="4">4</option>
-                    <option value="8" selected>8</option>
-                    <option value="12">12</option>
-                    <option value="16">16</option>
-                </select>
-                
-                <div class="pagination">
-                    <button id="prevPage" class="btn-secondary"><i class="fas fa-chevron-left"></i></button>
-                    <span id="pageInfo">Page 1 of 1</span>
-                    <button id="nextPage" class="btn-secondary"><i class="fas fa-chevron-right"></i></button>
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="cards">Bookmark Cards</button>
+            <button class="tab-btn" data-tab="browser">Web Browser</button>
+        </div>
+
+        <!-- Cards Tab -->
+        <div id="cardsTab" class="tab-content active">
+            <!-- Controls -->
+            <div class="controls">
+                <div class="control-group">
+                    <button id="addBtn" class="btn-primary">
+                        <i class="fas fa-plus"></i> Add New Bookmark
+                    </button>
+                    <button id="saveConfigBtn" class="btn-secondary">
+                        <i class="fas fa-save"></i> Save Config
+                    </button>
+                    <button id="loadConfigBtn" class="btn-secondary">
+                        <i class="fas fa-folder-open"></i> Load Config
+                    </button>
                 </div>
+                
+                <div class="pagination-controls">
+                    <label for="itemsPerPage">Items per page:</label>
+                    <select id="itemsPerPage">
+                        <option value="4">4</option>
+                        <option value="8" selected>8</option>
+                        <option value="12">12</option>
+                        <option value="16">16</option>
+                    </select>
+                    
+                    <div class="pagination">
+                        <button id="prevPage" class="btn-secondary"><i class="fas fa-chevron-left"></i></button>
+                        <span id="pageInfo">Page 1 of 1</span>
+                        <button id="nextPage" class="btn-secondary"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cards Container -->
+            <div id="cardsContainer" class="cards-container">
+                <!-- Cards will be dynamically inserted here -->
             </div>
         </div>
 
-        <!-- Cards Container -->
-        <div id="cardsContainer" class="cards-container">
-            <!-- Cards will be dynamically inserted here -->
+        <!-- Browser Tab -->
+        <div id="browserTab" class="tab-content">
+            <div class="browser-toolbar">
+                <button id="addPanelBtn" class="btn-primary">
+                    <i class="fas fa-plus"></i> Add Panel
+                </button>
+                <button id="resetPanelsBtn" class="btn-secondary">
+                    <i class="fas fa-redo"></i> Reset Panels
+                </button>
+            </div>
+            <div id="browserContainer" class="browser-container">
+                <!-- Browser panels will be dynamically inserted here -->
+            </div>
         </div>
 
         <!-- Add/Edit Modal -->

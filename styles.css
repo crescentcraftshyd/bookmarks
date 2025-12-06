@@ -21,7 +21,7 @@ body {
 /* Header Styles */
 header {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
     color: white;
     text-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
@@ -38,6 +38,51 @@ header p {
     animation: fadeInUp 0.8s ease-out 0.2s both;
 }
 
+/* Tab Navigation */
+.tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 5px;
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 15px 20px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.tab-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.tab-btn.active {
+    color: white;
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
 /* Controls */
 .controls {
     display: flex;
@@ -48,6 +93,24 @@ header p {
     margin-bottom: 30px;
     background: rgba(255, 255, 255, 0.9);
     padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    animation: slideInUp 0.6s ease-out;
+}
+
+.control-group {
+    display: flex;
+    gap: 10px;
+}
+
+/* Browser Toolbar */
+.browser-toolbar {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 15px 20px;
     border-radius: 15px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     backdrop-filter: blur(10px);
@@ -139,6 +202,152 @@ header p {
     margin-bottom: 40px;
 }
 
+/* Browser Container */
+.browser-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 20px;
+    min-height: 500px;
+}
+
+/* Browser Panel */
+.browser-panel {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+}
+
+.browser-panel.minimized {
+    flex-direction: row;
+    height: 60px;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    min-height: 50px;
+}
+
+.minimized .panel-header {
+    min-height: 60px;
+}
+
+.panel-title {
+    flex: 1;
+    font-weight: 600;
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 10px;
+}
+
+.panel-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.panel-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.panel-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+.panel-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.minimized .panel-content {
+    display: none;
+}
+
+.panel-address-bar {
+    display: flex;
+    padding: 10px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.panel-address-bar input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.panel-iframe-container {
+    position: relative;
+    flex: 1;
+}
+
+.panel-iframe {
+    flex: 1;
+    border: none;
+    width: 100%;
+    height: 100%;
+}
+
+.iframe-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+    z-index: 10;
+}
+
+.iframe-placeholder p {
+    margin: 10px 0;
+    color: #666;
+}
+
+.iframe-placeholder .btn-primary {
+    margin-top: 15px;
+}
+
+.panel-resizer {
+    height: 10px;
+    background: rgba(0, 0, 0, 0.1);
+    cursor: ns-resize;
+    transition: background 0.3s ease;
+}
+
+.panel-resizer:hover {
+    background: rgba(102, 126, 234, 0.5);
+}
+
 /* Card Styles */
 .card {
     background: rgba(255, 255, 255, 0.95);
@@ -149,6 +358,10 @@ header p {
     position: relative;
     cursor: pointer;
     animation: fadeIn 0.5s ease-out;
+    resize: both;
+    overflow: auto;
+    min-width: 200px;
+    min-height: 200px;
 }
 
 .card:hover {
@@ -250,6 +463,18 @@ header p {
     transform: translateY(-2px);
 }
 
+/* Drag and Drop Styles */
+.dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
+}
+
+.drop-zone {
+    border: 2px dashed #667eea;
+    border-radius: 15px;
+    background: rgba(102, 126, 234, 0.1);
+}
+
 /* Ripple Effect */
 .ripple {
     position: absolute;
@@ -291,6 +516,42 @@ header p {
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     position: relative;
     animation: slideInDown 0.4s ease-out;
+}
+
+/* File Input Styles */
+.file-input-wrapper {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+    width: 100%;
+    margin: 15px 0;
+}
+
+.file-input-wrapper input[type=file] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.file-input-button {
+    display: block;
+    padding: 12px 20px;
+    background: #f0f0f0;
+    color: #333;
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px dashed #ccc;
+}
+
+.file-input-button:hover {
+    background: #e0e0e0;
+    border-color: #667eea;
 }
 
 .close {
@@ -404,6 +665,10 @@ header p {
         align-items: stretch;
     }
     
+    .control-group {
+        flex-wrap: wrap;
+    }
+    
     .pagination-controls {
         justify-content: space-between;
     }
@@ -413,8 +678,16 @@ header p {
         gap: 20px;
     }
     
+    .browser-container {
+        grid-template-columns: 1fr;
+    }
+    
     header h1 {
         font-size: 2rem;
+    }
+    
+    .tabs {
+        flex-direction: column;
     }
 }
 
