@@ -13,12 +13,14 @@ class BookmarkManager {
         this.browserPanels = [];
         this.panelCounter = 0;
         this.draggedCard = null;
+        this.currentTheme = 'default';
         
         this.init();
     }
     
     init() {
         this.loadBookmarks();
+        this.loadTheme();
         this.render();
         this.attachEventListeners();
         this.initBrowserPanels();
@@ -87,6 +89,12 @@ class BookmarkManager {
     saveBookmarks() {
         localStorage.setItem('bookmarks', JSON.stringify(this.bookmarks));
     }
+    
+
+    
+
+    
+
     
     // Add a new bookmark
     addBookmark(url, title) {
@@ -192,6 +200,9 @@ class BookmarkManager {
         card.dataset.index = index;
         card.draggable = true;
         
+        // Add tooltip with URL
+        card.title = bookmark.url;
+        
         // Add ripple effect
         card.addEventListener('click', (e) => {
             if (e.target.closest('.card-btn')) return;
@@ -207,9 +218,6 @@ class BookmarkManager {
         }
         
         card.innerHTML = `
-            <div class="card-preview">
-                <i class="fas fa-${this.getIconForDomain(domain)}"></i>
-            </div>
             <div class="card-content">
                 <h3 class="card-title">${this.escapeHtml(bookmark.title)}</h3>
                 <p class="card-url">${this.escapeHtml(bookmark.url)}</p>
@@ -643,6 +651,34 @@ class BookmarkManager {
         return false;
     }
     
+    // Load theme from localStorage
+    loadTheme() {
+        const savedTheme = localStorage.getItem('bookmarkTheme');
+        if (savedTheme) {
+            this.currentTheme = savedTheme;
+            document.getElementById('themeSelect').value = savedTheme;
+            this.applyTheme(savedTheme);
+        }
+    }
+    
+    // Apply theme to the page
+    applyTheme(theme) {
+        // Remove all theme classes
+        document.body.classList.remove('theme-flower', 'theme-season', 'theme-galaxy', 'theme-environment');
+        
+        // Add selected theme class
+        if (theme !== 'default') {
+            document.body.classList.add(`theme-${theme}`);
+        }
+        
+        // Save theme preference
+        this.currentTheme = theme;
+        localStorage.setItem('bookmarkTheme', theme);
+        
+        // Re-render cards to apply theme
+        this.render();
+    }
+    
     // Attach event listeners
     attachEventListeners() {
         // Add button
@@ -728,6 +764,11 @@ class BookmarkManager {
                 const tabName = e.target.dataset.tab;
                 this.switchTab(tabName);
             });
+        });
+        
+        // Theme selection
+        document.getElementById('themeSelect').addEventListener('change', (e) => {
+            this.applyTheme(e.target.value);
         });
         
         // Browser panel controls (using event delegation)
@@ -838,6 +879,8 @@ class BookmarkManager {
         loadConfigInput.addEventListener('change', (e) => {
             this.loadConfiguration(e);
         });
+        
+
         
         // Close modals with Escape key
         document.addEventListener('keydown', (e) => {
