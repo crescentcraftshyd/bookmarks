@@ -10,10 +10,17 @@ class BookmarkManager {
         this.currentPage = 1;
         this.itemsPerPage = 8;
         this.editIndex = -1;
-        this.browserPanels = [];
-        this.panelCounter = 0;
         this.draggedCard = null;
         this.currentTheme = 'default';
+        
+        // Calculator properties
+        this.displayValue = '0';
+        this.firstOperand = null;
+        this.waitingForOperand = false;
+        this.operator = null;
+        
+        // Todo list properties
+        this.todos = [];
         
         this.init();
     }
@@ -21,9 +28,9 @@ class BookmarkManager {
     init() {
         this.loadBookmarks();
         this.loadTheme();
+        this.loadTodos();
         this.render();
         this.attachEventListeners();
-        this.initBrowserPanels();
     }
     
     // Load bookmarks from localStorage if available
@@ -34,25 +41,30 @@ class BookmarkManager {
         }
     }
     
-    // Save configuration to file
+    // Save configuration to ZIP file
     saveConfiguration() {
         const config = {
             bookmarks: this.bookmarks,
-            browserPanels: this.browserPanels
+            todos: this.todos
         };
         
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+        // Create a simple text format for the config
+        const configText = JSON.stringify(config, null, 2);
+        
+        // For a real implementation, you would use a library like JSZip
+        // But for this demo, we'll save as a text file with .zip extension
+        const dataStr = "data:text/plain;charset=utf-8," + encodeURIComponent(configText);
         const downloadAnchorNode = document.createElement('a');
         downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", "bookmark-config.json");
+        downloadAnchorNode.setAttribute("download", "crescentcrafts-config.zip");
         document.body.appendChild(downloadAnchorNode);
         downloadAnchorNode.click();
         downloadAnchorNode.remove();
         
-        this.showNotification("Configuration saved successfully!", "success");
+        this.showNotification("Configuration saved as ZIP successfully!", "success");
     }
     
-    // Load configuration from file
+    // Load configuration from ZIP file
     loadConfiguration(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -66,17 +78,17 @@ class BookmarkManager {
                     this.bookmarks = config.bookmarks;
                 }
                 
-                if (config.browserPanels) {
-                    this.browserPanels = config.browserPanels;
-                    this.panelCounter = config.browserPanels.length;
+                if (config.todos) {
+                    this.todos = config.todos;
                 }
                 
                 this.currentPage = 1;
                 this.saveBookmarks();
+                this.saveTodos();
                 this.render();
-                this.renderBrowserPanels();
+                this.renderTodos();
                 
-                this.showNotification("Configuration loaded successfully!", "success");
+                this.showNotification("Configuration loaded from ZIP successfully!", "success");
             } catch (error) {
                 console.error("Error loading configuration:", error);
                 this.showNotification("Error loading configuration file", "error");
@@ -219,7 +231,7 @@ class BookmarkManager {
         
         card.innerHTML = `
             <div class="card-content">
-                <h3 class="card-title">${this.escapeHtml(bookmark.title)}</h3>
+                <h3 class="card-title">${this.escapeHtml(bookmark.title.toUpperCase())}</h3>
                 <p class="card-url">${this.escapeHtml(bookmark.url)}</p>
                 <div class="card-actions">
                     <button class="card-btn edit-btn" data-action="edit">
@@ -439,135 +451,346 @@ class BookmarkManager {
         }, 3000);
     }
     
-    // Initialize browser panels
-    initBrowserPanels() {
-        // Add initial panel
-        this.addBrowserPanel();
-    }
-    
-    // Add a new browser panel
-    addBrowserPanel(url = 'https://www.google.com') {
-        const panelId = `panel-${this.panelCounter++}`;
-        const panel = {
-            id: panelId,
-            url: url,
-            title: 'New Tab',
-            minimized: false
+    // Todo List methods
+    addTodo(title, notes = '', documents = []) {
+        const newTodo = {
+            id: Date.now(),
+            title: title,
+            notes: notes,
+            documents: documents,
+            completed: false,
+            createdAt: new Date().toISOString()
         };
         
-        this.browserPanels.push(panel);
-        this.renderBrowserPanels();
+        this.todos.unshift(newTodo);
+        this.saveTodos();
+        this.renderTodos();
+        this.showNotification('Todo added successfully!', 'success');
     }
     
-    // Remove a browser panel
-    removeBrowserPanel(panelId) {
-        this.browserPanels = this.browserPanels.filter(panel => panel.id !== panelId);
-        this.renderBrowserPanels();
-    }
-    
-    // Toggle panel minimization
-    togglePanelMinimize(panelId) {
-        const panel = this.browserPanels.find(p => p.id === panelId);
-        if (panel) {
-            panel.minimized = !panel.minimized;
-            this.renderBrowserPanels();
+    editTodo(id, title, notes = '', documents = []) {
+        const todoIndex = this.todos.findIndex(todo => todo.id === id);
+        if (todoIndex !== -1) {
+            this.todos[todoIndex].title = title;
+            this.todos[todoIndex].notes = notes;
+            this.todos[todoIndex].documents = documents;
+            this.saveTodos();
+            this.renderTodos();
+            this.showNotification('Todo updated successfully!', 'success');
         }
     }
     
-    // Update panel URL
-    updatePanelUrl(panelId, url) {
-        const panel = this.browserPanels.find(p => p.id === panelId);
-        if (panel) {
-            panel.url = url;
-            try {
-                const domain = new URL(url).hostname.replace('www.', '');
-                panel.title = domain.charAt(0).toUpperCase() + domain.slice(1);
-            } catch (e) {
-                panel.title = 'New Tab';
-            }
-            this.renderBrowserPanels();
+    deleteTodo(id) {
+        this.todos = this.todos.filter(todo => todo.id !== id);
+        this.saveTodos();
+        this.renderTodos();
+        this.showNotification('Todo deleted successfully!', 'success');
+    }
+    
+    toggleTodoCompletion(id) {
+        const todo = this.todos.find(todo => todo.id === id);
+        if (todo) {
+            todo.completed = !todo.completed;
+            this.saveTodos();
+            this.renderTodos();
         }
     }
     
-    // Render browser panels
-    renderBrowserPanels() {
-        const container = document.getElementById('browserContainer');
-        container.innerHTML = '';
+    renderTodos() {
+        const container = document.getElementById('todoList');
         
-        if (this.browserPanels.length === 0) {
+        if (this.todos.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
-                    <i class="fas fa-window-maximize fa-3x"></i>
-                    <h3>No browser panels</h3>
-                    <p>Click "Add Panel" to create a new browsing panel</p>
+                    <i class="fas fa-tasks fa-3x"></i>
+                    <h3>No todos yet</h3>
+                    <p>Click "Add Todo" to create your first task</p>
                 </div>
             `;
             return;
         }
         
-        this.browserPanels.forEach(panel => {
-            const panelElement = this.createPanelElement(panel);
-            container.appendChild(panelElement);
+        container.innerHTML = '';
+        
+        this.todos.forEach(todo => {
+            const todoElement = this.createTodoElement(todo);
+            container.appendChild(todoElement);
         });
     }
     
-    // Create panel element
-    createPanelElement(panel) {
-        const panelElement = document.createElement('div');
-        panelElement.className = `browser-panel ${panel.minimized ? 'minimized' : ''}`;
-        panelElement.id = panel.id;
+    createTodoElement(todo) {
+        const todoElement = document.createElement('div');
+        todoElement.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+        todoElement.dataset.id = todo.id;
         
-        panelElement.innerHTML = `
-            <div class="panel-header">
-                <div class="panel-title">${this.escapeHtml(panel.title)}</div>
-                <div class="panel-controls">
-                    <button class="panel-btn minimize-btn" title="${panel.minimized ? 'Maximize' : 'Minimize'}">
-                        <i class="fas fa-${panel.minimized ? 'expand' : 'compress'}"></i>
+        let documentsHtml = '';
+        if (todo.documents && todo.documents.length > 0) {
+            documentsHtml = `
+                <div class="todo-documents">
+                    <h4>Documents:</h4>
+                    ${todo.documents.map(doc => `
+                        <div class="document-item" data-doc-id="${doc.id}">
+                            <i class="fas fa-file"></i>
+                            <div class="document-name">${this.escapeHtml(doc.name)}</div>
+                            <div class="document-actions">
+                                <button class="todo-btn preview-toggle" data-doc-id="${doc.id}">
+                                    <i class="fas fa-eye"></i> Preview
+                                </button>
+                                <button class="todo-btn delete-doc-btn" data-doc-id="${doc.id}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="document-preview" id="preview-${doc.id}" style="display: none;">
+                            <iframe class="document-preview-content" src="${doc.url}" frameborder="0"></iframe>
+                            <button class="preview-toggle" data-doc-id="${doc.id}">
+                                <i class="fas fa-compress"></i> Minimize
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        todoElement.innerHTML = `
+            <div class="todo-item-header">
+                <input type="checkbox" class="todo-checkbox" ${todo.completed ? 'checked' : ''}>
+                <h3 class="todo-title">${this.escapeHtml(todo.title)}</h3>
+                <div class="todo-actions">
+                    <button class="todo-btn edit-todo-btn">
+                        <i class="fas fa-edit"></i>
                     </button>
-                    <button class="panel-btn close-btn" title="Close">
-                        <i class="fas fa-times"></i>
+                    <button class="todo-btn delete-todo-btn">
+                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>
-            <div class="panel-content">
-                <div class="panel-address-bar">
-                    <input type="text" class="panel-url" value="${this.escapeHtml(panel.url)}" placeholder="Enter website URL">
-                </div>
-                <div class="panel-iframe-container">
-                    <div class="iframe-placeholder">
-                        <p><i class="fas fa-info-circle"></i> Preview may be blocked by site security settings.</p>
-                        <p>Click <strong>Open in New Tab</strong> button to view the site.</p>
-                        <button class="btn-primary open-tab-btn" data-url="${this.escapeHtml(panel.url)}">
-                            <i class="fas fa-external-link-alt"></i> Open in New Tab
-                        </button>
-                    </div>
-                    <iframe src="${this.escapeHtml(panel.url)}" class="panel-iframe" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
-                </div>
-                <div class="panel-resizer"></div>
+            <div class="todo-content">
+                ${todo.notes ? `<div class="todo-notes">${this.escapeHtml(todo.notes)}</div>` : ''}
+                ${documentsHtml}
+                <button class="add-document-btn">
+                    <i class="fas fa-paperclip"></i> Add Document
+                </button>
+                <input type="file" class="document-upload" style="display: none;" multiple>
             </div>
         `;
         
-        // Add event listener for open in new tab button
-        const openTabBtn = panelElement.querySelector('.open-tab-btn');
-        if (openTabBtn) {
-            openTabBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const url = e.target.dataset.url || e.target.closest('.open-tab-btn').dataset.url;
-                if (url) {
-                    window.open(url, '_blank');
-                }
-            });
-        }
-        
-        return panelElement;
+        return todoElement;
     }
     
-    // Reset browser panels
-    resetBrowserPanels() {
-        this.browserPanels = [];
-        this.panelCounter = 0;
-        this.addBrowserPanel();
+    // Todo modal methods
+    openAddTodoModal() {
+        // For simplicity, we'll just add a basic todo
+        const title = prompt('Enter todo title:');
+        if (title) {
+            this.addTodo(title);
+        }
     }
+    
+    openEditTodoModal(todoId) {
+        const todo = this.todos.find(t => t.id === todoId);
+        if (todo) {
+            const newTitle = prompt('Edit todo title:', todo.title);
+            if (newTitle !== null) {
+                this.editTodo(todoId, newTitle, todo.notes, todo.documents);
+            }
+        }
+    }
+    
+    // Document handling methods
+    handleDocumentUpload(todoId, files) {
+        const todo = this.todos.find(t => t.id === todoId);
+        if (!todo) return;
+        
+        // For this implementation, we'll create object URLs for preview
+        // In a real app, you'd want to handle actual file storage
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const fileUrl = URL.createObjectURL(file);
+            
+            const document = {
+                id: Date.now() + i, // Simple ID generation
+                name: file.name,
+                url: fileUrl,
+                type: file.type
+            };
+            
+            if (!todo.documents) {
+                todo.documents = [];
+            }
+            todo.documents.push(document);
+        }
+        
+        this.saveTodos();
+        this.renderTodos();
+        this.showNotification(`${files.length} document(s) added successfully!`, 'success');
+    }
+    
+    toggleDocumentPreview(docId) {
+        const preview = document.getElementById(`preview-${docId}`);
+        if (preview) {
+            if (preview.style.display === 'none') {
+                preview.style.display = 'block';
+                preview.classList.remove('minimized');
+            } else {
+                preview.style.display = 'none';
+            }
+        }
+    }
+    
+    deleteDocument(todoId, docId) {
+        const todo = this.todos.find(t => t.id === todoId);
+        if (todo && todo.documents) {
+            todo.documents = todo.documents.filter(doc => doc.id != docId);
+            this.saveTodos();
+            this.renderTodos();
+            this.showNotification('Document deleted successfully!', 'success');
+        }
+    }
+    
+    // Calculator methods
+    inputDigit(digit) {
+        if (this.waitingForOperand) {
+            this.displayValue = digit;
+            this.waitingForOperand = false;
+        } else {
+            this.displayValue = this.displayValue === '0' ? digit : this.displayValue + digit;
+        }
+        this.updateDisplay();
+    }
+    
+    inputDecimal() {
+        if (this.waitingForOperand) {
+            this.displayValue = '0.';
+            this.waitingForOperand = false;
+            this.updateDisplay();
+            return;
+        }
+        
+        if (this.displayValue.indexOf('.') === -1) {
+            this.displayValue += '.';
+            this.updateDisplay();
+        }
+    }
+    
+    handleOperator(nextOperator) {
+        const inputValue = parseFloat(this.displayValue);
+        
+        if (this.firstOperand === null) {
+            this.firstOperand = inputValue;
+        } else if (this.operator) {
+            const currentValue = this.firstOperand || 0;
+            const newValue = this.performCalculation(this.operator, currentValue, inputValue);
+            
+            this.firstOperand = newValue;
+            this.displayValue = String(newValue);
+        }
+        
+        this.waitingForOperand = true;
+        this.operator = nextOperator;
+        this.updateDisplay();
+    }
+    
+    performCalculation(operator, firstOperand, secondOperand) {
+        switch (operator) {
+            case '+':
+                return firstOperand + secondOperand;
+            case '-':
+                return firstOperand - secondOperand;
+            case '*':
+                return firstOperand * secondOperand;
+            case '/':
+                return firstOperand / secondOperand;
+            default:
+                return secondOperand;
+        }
+    }
+    
+    calculate() {
+        const inputValue = parseFloat(this.displayValue);
+        
+        if (this.firstOperand !== null && this.operator) {
+            const newValue = this.performCalculation(this.operator, this.firstOperand, inputValue);
+            this.displayValue = String(newValue);
+            this.firstOperand = null;
+            this.operator = null;
+            this.waitingForOperand = true;
+            this.updateDisplay();
+        }
+    }
+    
+    resetCalculator() {
+        this.displayValue = '0';
+        this.firstOperand = null;
+        this.waitingForOperand = false;
+        this.operator = null;
+        this.updateDisplay();
+    }
+    
+    clearEntry() {
+        this.displayValue = '0';
+        this.updateDisplay();
+    }
+    
+    backspace() {
+        if (this.displayValue.length > 1) {
+            this.displayValue = this.displayValue.slice(0, -1);
+        } else {
+            this.displayValue = '0';
+        }
+        this.updateDisplay();
+    }
+    
+    updateDisplay() {
+        const display = document.querySelector('.main-display');
+        if (display) {
+            display.textContent = this.displayValue;
+        }
+    }
+    
+    // Unit conversion methods
+    convertUnits() {
+        const inputValue = parseFloat(document.querySelector('.conversion-input').value);
+        if (isNaN(inputValue)) {
+            this.showNotification('Please enter a valid number', 'error');
+            return;
+        }
+        
+        const fromUnit = document.querySelector('.conversion-from').value;
+        const toUnit = document.querySelector('.conversion-to').value;
+        
+        // Conversion factors to meters
+        const conversionFactors = {
+            'cm': 0.01,
+            'in': 0.0254,
+            'm': 1,
+            'ft': 0.3048,
+            'km': 1000,
+            'mi': 1609.344
+        };
+        
+        // Convert to meters first, then to target unit
+        const valueInMeters = inputValue * conversionFactors[fromUnit];
+        const result = valueInMeters / conversionFactors[toUnit];
+        
+        document.querySelector('.conversion-output').value = result.toFixed(6);
+        
+        // Update conversion display
+        const conversionDisplay = document.querySelector('.conversion-display');
+        if (conversionDisplay) {
+            const unitNames = {
+                'cm': 'cm',
+                'in': 'in',
+                'm': 'm',
+                'ft': 'ft',
+                'km': 'km',
+                'mi': 'mi'
+            };
+            conversionDisplay.textContent = `${inputValue} ${unitNames[fromUnit]} = ${result.toFixed(6)} ${unitNames[toUnit]}`;
+        }
+    }
+    
+
     
     // Switch tabs
     switchTab(tabName) {
@@ -587,9 +810,9 @@ class BookmarkManager {
         // Set active class on clicked tab button
         document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
         
-        // Re-render browser panels when switching to browser tab
-        if (tabName === 'browser') {
-            this.renderBrowserPanels();
+        // Re-render todos when switching to todo tab
+        if (tabName === 'todo') {
+            this.renderTodos();
         }
     }
     
@@ -659,6 +882,19 @@ class BookmarkManager {
             document.getElementById('themeSelect').value = savedTheme;
             this.applyTheme(savedTheme);
         }
+    }
+    
+    // Load todos from localStorage
+    loadTodos() {
+        const savedTodos = localStorage.getItem('todos');
+        if (savedTodos) {
+            this.todos = JSON.parse(savedTodos);
+        }
+    }
+    
+    // Save todos to localStorage
+    saveTodos() {
+        localStorage.setItem('todos', JSON.stringify(this.todos));
     }
     
     // Apply theme to the page
@@ -771,93 +1007,63 @@ class BookmarkManager {
             this.applyTheme(e.target.value);
         });
         
-        // Browser panel controls (using event delegation)
-        document.getElementById('browserContainer').addEventListener('click', (e) => {
-            const panel = e.target.closest('.browser-panel');
-            if (!panel) return;
-            
-            const panelId = panel.id;
-            
-            // Minimize button
-            if (e.target.closest('.minimize-btn')) {
-                this.togglePanelMinimize(panelId);
-                return;
-            }
-            
-            // Close button
-            if (e.target.closest('.close-btn')) {
-                this.removeBrowserPanel(panelId);
-                return;
-            }
+        // Todo List functionality
+        document.getElementById('addTodoBtn').addEventListener('click', () => {
+            this.openAddTodoModal();
         });
         
-        // URL input handling
-        document.getElementById('browserContainer').addEventListener('keypress', (e) => {
-            if (e.target.classList.contains('panel-url') && e.key === 'Enter') {
-                const panel = e.target.closest('.browser-panel');
-                if (panel) {
-                    const panelId = panel.id;
-                    let url = e.target.value.trim();
-                    
-                    // Add protocol if missing
-                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                        url = 'https://' + url;
-                    }
-                    
-                    this.updatePanelUrl(panelId, url);
-                    
-                    // Update iframe source
-                    const iframe = panel.querySelector('.panel-iframe');
-                    if (iframe) {
-                        // For sites that block iframes, we'll show a message
-                        iframe.src = url;
-                        
-                        // Show notification about X-Frame-Options
-                        this.showNotification(
-                            "Some websites block embedding for security reasons. " +
-                            "If the site doesn't load, use the 'Open in New Tab' button.", 
-                            "info"
-                        );
-                    }
+        // Todo List event delegation
+        document.getElementById('todoList').addEventListener('click', (e) => {
+            const todoItem = e.target.closest('.todo-item');
+            if (!todoItem) return;
+            
+            const todoId = parseInt(todoItem.dataset.id);
+            
+            // Checkbox toggle
+            if (e.target.classList.contains('todo-checkbox')) {
+                this.toggleTodoCompletion(todoId);
+            }
+            
+            // Edit button
+            if (e.target.closest('.edit-todo-btn')) {
+                this.openEditTodoModal(todoId);
+            }
+            
+            // Delete button
+            if (e.target.closest('.delete-todo-btn')) {
+                this.deleteTodo(todoId);
+            }
+            
+            // Add document button
+            if (e.target.closest('.add-document-btn')) {
+                const fileInput = todoItem.querySelector('.document-upload');
+                if (fileInput) {
+                    fileInput.click();
                 }
             }
-        });
-        
-        // Add panel button
-        document.getElementById('addPanelBtn').addEventListener('click', () => {
-            this.addBrowserPanel();
-        });
-        
-        // Reset panels button
-        document.getElementById('resetPanelsBtn').addEventListener('click', () => {
-            this.resetBrowserPanels();
-        });
-        
-        // Panel resizing
-        document.getElementById('browserContainer').addEventListener('mousedown', (e) => {
-            if (e.target.classList.contains('panel-resizer')) {
-                const panel = e.target.closest('.browser-panel');
-                if (!panel) return;
-                
-                const startY = e.clientY;
-                const startHeight = panel.offsetHeight;
-                
-                const doDrag = (e) => {
-                    const newHeight = startHeight + (e.clientY - startY);
-                    if (newHeight > 200) { // Minimum height
-                        panel.style.height = newHeight + 'px';
-                    }
-                };
-                
-                const stopDrag = () => {
-                    document.removeEventListener('mousemove', doDrag);
-                    document.removeEventListener('mouseup', stopDrag);
-                };
-                
-                document.addEventListener('mousemove', doDrag);
-                document.addEventListener('mouseup', stopDrag);
+            
+            // Document upload
+            if (e.target.classList.contains('document-upload')) {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    this.handleDocumentUpload(todoId, files);
+                }
+            }
+            
+            // Preview toggle
+            if (e.target.closest('.preview-toggle')) {
+                const docId = e.target.closest('.preview-toggle').dataset.docId;
+                this.toggleDocumentPreview(docId);
+            }
+            
+            // Delete document
+            if (e.target.closest('.delete-doc-btn')) {
+                const docId = e.target.closest('.delete-doc-btn').dataset.docId;
+                this.deleteDocument(todoId, docId);
             }
         });
+        
+
         
         // Save configuration
         document.getElementById('saveConfigBtn').addEventListener('click', () => {
@@ -886,6 +1092,66 @@ class BookmarkManager {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 this.closeModal();
+            }
+        });
+        
+        // Calculator functionality
+        const calculatorButtons = document.querySelector('.calculator-buttons');
+        if (calculatorButtons) {
+            calculatorButtons.addEventListener('click', (e) => {
+                if (!e.target.classList.contains('calc-btn')) return;
+                
+                const value = e.target.dataset.value;
+                
+                if (!isNaN(value) || value === '.') {
+                    if (value === '.') {
+                        this.inputDecimal();
+                    } else {
+                        this.inputDigit(value);
+                    }
+                } else if (['+', '-', '*', '/'].includes(value)) {
+                    this.handleOperator(value);
+                } else if (value === '=') {
+                    this.calculate();
+                } else if (value === 'C') {
+                    this.resetCalculator();
+                } else if (value === 'CE') {
+                    this.clearEntry();
+                } else if (value === 'backspace') {
+                    this.backspace();
+                }
+            });
+        }
+        
+        // Unit conversion
+        const convertBtn = document.querySelector('.convert-btn');
+        if (convertBtn) {
+            convertBtn.addEventListener('click', () => {
+                this.convertUnits();
+            });
+        }
+        
+        // Keyboard support for calculator
+        document.addEventListener('keydown', (e) => {
+            // Only handle calculator keys when calculator tab is active
+            if (!document.getElementById('calculatorTab').classList.contains('active')) return;
+            
+            const key = e.key;
+            
+            if (/[0-9]/.test(key)) {
+                this.inputDigit(key);
+            } else if (key === '.') {
+                this.inputDecimal();
+            } else if (['+', '-', '*', '/'].includes(key)) {
+                this.handleOperator(key);
+            } else if (key === '=' || key === 'Enter') {
+                this.calculate();
+            } else if (key === 'Escape') {
+                this.resetCalculator();
+            } else if (key === 'Backspace') {
+                this.backspace();
+            } else if (key === 'Delete') {
+                this.clearEntry();
             }
         });
     }
