@@ -7,12 +7,65 @@
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
+    <!-- Side Menu Toggle Button -->
+    <button id="menuToggle" class="menu-toggle">
+        <i class="fas fa-bars"></i>
+    </button>
+    
+    <!-- Side Menu -->
+    <div id="sideMenu" class="side-menu">
+        <div class="side-menu-header">
+            <h2>Menu</h2>
+            <button id="closeMenu" class="close-menu">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="side-menu-content">
+            <!-- Theme Selector -->
+            <div class="theme-selector">
+                <label for="themeSelect">Theme:</label>
+                <select id="themeSelect">
+                    <option value="default">Default (Confidence & Trust)</option>
+                    <option value="flower">Flower Garden</option>
+                    <option value="season">Seasonal</option>
+                    <option value="galaxy">Galaxy</option>
+                    <option value="environment">Environment</option>
+                </select>
+            </div>
+            
+            <!-- Save/Load Buttons -->
+            <div class="config-buttons">
+                <button id="saveConfigBtn" class="btn-small">
+                    <i class="fas fa-save"></i> Save
+                </button>
+                <button id="loadConfigBtn" class="btn-small">
+                    <i class="fas fa-folder-open"></i> Load
+                </button>
+                <input type="file" id="configFileInput" accept=".zip,application/zip" style="display: none;">
+            </div>
+            
+            <!-- Tab Navigation -->
+            <div class="side-menu-tabs">
+                <h3>Tabs</h3>
+                <button class="side-tab-btn active" data-tab="cards">Book Mark</button>
+                <button class="side-tab-btn" data-tab="calculator">Calculator</button>
+                <button class="side-tab-btn" data-tab="todo">Todo List</button>
+            </div>
+        </div>
+    </div>
+    
     <div class="container">
         <header>
-            <h1><i class="fas fa-bookmark"></i> CrescentCraftsUtilities</h1>
-            <p>Your all-in-one utility toolkit</p>
+            <div class="header-content">
+                <div>
+                    <h1><i class="fas fa-bookmark"></i> CrescentCraftsUtilities</h1>
+                    <p>Your all-in-one utility toolkit</p>
+                </div>
+            </div>
         </header>
 
         <!-- Tab Navigation -->
@@ -20,18 +73,6 @@
             <button class="tab-btn active" data-tab="cards">Book Mark</button>
             <button class="tab-btn" data-tab="calculator">Calculator</button>
             <button class="tab-btn" data-tab="todo">Todo List</button>
-        </div>
-        
-        <!-- Theme Selector -->
-        <div class="theme-selector">
-            <label for="themeSelect">Theme:</label>
-            <select id="themeSelect">
-                <option value="default">Default (Confidence & Trust)</option>
-                <option value="flower">Flower Garden</option>
-                <option value="season">Seasonal</option>
-                <option value="galaxy">Galaxy</option>
-                <option value="environment">Environment</option>
-            </select>
         </div>
 
         <!-- Cards Tab -->
@@ -41,12 +82,6 @@
                 <div class="control-group">
                     <button id="addBtn" class="btn-primary">
                         <i class="fas fa-plus"></i> Add New Bookmark
-                    </button>
-                    <button id="saveConfigBtn" class="btn-secondary">
-                        <i class="fas fa-save"></i> Save Config
-                    </button>
-                    <button id="loadConfigBtn" class="btn-secondary">
-                        <i class="fas fa-folder-open"></i> Load Config
                     </button>
                 </div>
                 
@@ -119,7 +154,7 @@
                                 <option value="mi">Miles</option>
                             </select>
                             <span>=</span>
-                            <input type="number" class="conversion-output" readonly>
+                            <input type="number" class="conversion-output">
                             <select class="conversion-to">
                                 <option value="in">Inches</option>
                                 <option value="cm">Centimeters</option>
@@ -128,7 +163,6 @@
                                 <option value="km">Kilometers</option>
                                 <option value="mi">Miles</option>
                             </select>
-                            <button class="btn-primary convert-btn">Convert</button>
                         </div>
                     </div>
                 </div>
@@ -170,9 +204,36 @@
                         <label for="title">Title (optional):</label>
                         <input type="text" id="title" placeholder="Website Title">
                     </div>
+                    <div class="form-group">
+                        <label for="description">Description (optional):</label>
+                        <textarea id="description" placeholder="Brief description of the website" rows="3"></textarea>
+                    </div>
                     <div class="form-actions">
                         <button type="button" id="cancelBtn" class="btn-secondary">Cancel</button>
                         <button type="submit" class="btn-primary">Save Bookmark</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add/Edit Todo Modal -->
+        <div id="todoModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2 id="todoModalTitle">Add New Todo</h2>
+                <form id="todoForm">
+                    <input type="hidden" id="editTodoId">
+                    <div class="form-group">
+                        <label for="todoTitle">Todo Title:</label>
+                        <input type="text" id="todoTitle" placeholder="Enter todo title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="todoDescription">Description (optional):</label>
+                        <textarea id="todoDescription" placeholder="Enter detailed description" rows="4"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" id="cancelTodoBtn" class="btn-secondary">Cancel</button>
+                        <button type="submit" class="btn-primary">Save Todo</button>
                     </div>
                 </form>
             </div>

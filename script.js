@@ -2,10 +2,10 @@
 class BookmarkManager {
     constructor() {
         this.bookmarks = [
-            { url: "https://refactoring.guru/design-patterns/prototype", title: "Prototype Design Pattern" },
-            { url: "https://imresizer.com/", title: "Image Resizer" },
-            { url: "https://sellercentral.amazon.in/home", title: "Amazon Seller Central" },
-            { url: "https://picsart.com/", title: "Picsart" }
+            { url: "https://refactoring.guru/design-patterns/prototype", title: "Prototype Design Pattern", description: "Learn about prototype design patterns" },
+            { url: "https://imresizer.com/", title: "Image Resizer", description: "Resize images online" },
+            { url: "https://sellercentral.amazon.in/home", title: "Amazon Seller Central", description: "Manage your Amazon store" },
+            { url: "https://picsart.com/", title: "Picsart", description: "Photo editing and design" }
         ];
         this.currentPage = 1;
         this.itemsPerPage = 8;
@@ -42,59 +42,151 @@ class BookmarkManager {
     }
     
     // Save configuration to ZIP file
-    saveConfiguration() {
-        const config = {
-            bookmarks: this.bookmarks,
-            todos: this.todos
-        };
-        
-        // Create a simple text format for the config
-        const configText = JSON.stringify(config, null, 2);
-        
-        // For a real implementation, you would use a library like JSZip
-        // But for this demo, we'll save as a text file with .zip extension
-        const dataStr = "data:text/plain;charset=utf-8," + encodeURIComponent(configText);
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", "crescentcrafts-config.zip");
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
-        
-        this.showNotification("Configuration saved as ZIP successfully!", "success");
+    async saveConfiguration() {
+        try {
+            const zip = new JSZip();
+            
+            // Create a copy of the data to avoid modifying the originals
+            const config = {
+                bookmarks: [...this.bookmarks],
+                todos: JSON.parse(JSON.stringify(this.todos)) // Deep clone
+            };
+            
+            // Process todos to handle file data
+            const fileMap = new Map(); // Map to track file IDs to file data
+            
+            for (const todo of config.todos) {
+                if (todo.documents && todo.documents.length > 0) {
+                    for (const doc of todo.documents) {
+                        // Store file data in the map
+                        if (doc.url) {
+                            try {
+                                // Fetch the file data
+                                const response = await fetch(doc.url);
+                                if (response.ok) {
+                                    const fileData = await response.arrayBuffer();
+                                    const fileId = `files/${doc.id}_${doc.name}`;
+                                    fileMap.set(fileId, {
+                                        data: fileData,
+                                        name: doc.name,
+                                        type: doc.type,
+                                        size: doc.size
+                                    });
+                                    
+                                    // Update the document reference to point to the file in the ZIP
+                                    doc.filePath = fileId;
+                                    // Remove the URL since it won't be valid after saving
+                                    delete doc.url;
+                                }
+                            } catch (error) {
+                                console.warn(`Could not fetch file ${doc.name}:`, error);
+                                // Keep the URL as fallback
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Add the configuration file
+            zip.file('config.json', JSON.stringify(config, null, 2));
+            
+            // Add all files to the ZIP
+            for (const [fileId, fileData] of fileMap.entries()) {
+                zip.file(fileId, fileData.data);
+            }
+            
+            // Generate the ZIP file
+            const content = await zip.generateAsync({type: 'blob'});
+            
+            // Create download link
+            const url = URL.createObjectURL(content);
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute('href', url);
+            downloadAnchorNode.setAttribute('download', 'crescentcrafts-config.zip');
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            
+            // Clean up the object URL
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            
+            this.showNotification('Configuration saved as ZIP successfully!', 'success');
+        } catch (error) {
+            console.error('Error saving configuration:', error);
+            this.showNotification('Error saving configuration: ' + error.message, 'error');
+        }
     }
     
     // Load configuration from ZIP file
-    loadConfiguration(event) {
+    async loadConfiguration(event) {
         const file = event.target.files[0];
         if (!file) return;
         
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const config = JSON.parse(e.target.result);
-                
-                if (config.bookmarks) {
-                    this.bookmarks = config.bookmarks;
+        try {
+            // Load the ZIP file
+            const zip = await JSZip.loadAsync(file);
+            
+            // Read the configuration file
+            const configFile = zip.file('config.json');
+            if (!configFile) {
+                throw new Error('Configuration file not found in ZIP');
+            }
+            
+            const configText = await configFile.async('text');
+            const config = JSON.parse(configText);
+            
+            // Process todos to restore file data
+            if (config.todos && config.todos.length > 0) {
+                for (const todo of config.todos) {
+                    if (todo.documents && todo.documents.length > 0) {
+                        for (const doc of todo.documents) {
+                            // If the document has a filePath, restore it from the ZIP
+                            if (doc.filePath) {
+                                try {
+                                    const fileEntry = zip.file(doc.filePath);
+                                    if (fileEntry) {
+                                        // Get file data as blob
+                                        const fileData = await fileEntry.async('blob');
+                                        // Create a new object URL
+                                        const url = URL.createObjectURL(fileData);
+                                        // Update the document with the new URL
+                                        doc.url = url;
+                                        // Remove the filePath reference
+                                        delete doc.filePath;
+                                    }
+                                } catch (error) {
+                                    console.warn(`Could not restore file ${doc.name}:`, error);
+                                }
+                            }
+                        }
+                    }
                 }
-                
-                if (config.todos) {
-                    this.todos = config.todos;
-                }
-                
-                this.currentPage = 1;
-                this.saveBookmarks();
-                this.saveTodos();
+            }
+            
+            // Update the application state
+            if (config.bookmarks) {
+                this.bookmarks = config.bookmarks;
+            }
+            
+            if (config.todos) {
+                this.todos = config.todos;
+            }
+            
+            this.currentPage = 1;
+            this.saveBookmarks();
+            this.saveTodos();
+            
+            // Small delay to ensure proper rendering
+            setTimeout(() => {
                 this.render();
                 this.renderTodos();
-                
-                this.showNotification("Configuration loaded from ZIP successfully!", "success");
-            } catch (error) {
-                console.error("Error loading configuration:", error);
-                this.showNotification("Error loading configuration file", "error");
-            }
-        };
-        reader.readAsText(file);
+            }, 50);
+            
+            this.showNotification('Configuration loaded from ZIP successfully!', 'success');
+        } catch (error) {
+            console.error('Error loading configuration:', error);
+            this.showNotification('Error loading configuration file: ' + error.message, 'error');
+        }
     }
     
     // Save bookmarks to localStorage
@@ -109,7 +201,7 @@ class BookmarkManager {
 
     
     // Add a new bookmark
-    addBookmark(url, title) {
+    addBookmark(url, title, description = '') {
         // If title is empty, extract domain name from URL
         if (!title) {
             try {
@@ -120,7 +212,12 @@ class BookmarkManager {
             }
         }
         
-        this.bookmarks.push({ url, title });
+        const bookmark = { url, title };
+        if (description) {
+            bookmark.description = description;
+        }
+        
+        this.bookmarks.push(bookmark);
         this.saveBookmarks();
         this.render();
         
@@ -129,7 +226,7 @@ class BookmarkManager {
     }
     
     // Edit an existing bookmark
-    editBookmark(index, url, title) {
+    editBookmark(index, url, title, description = '') {
         if (index >= 0 && index < this.bookmarks.length) {
             // If title is empty, extract domain name from URL
             if (!title) {
@@ -141,7 +238,12 @@ class BookmarkManager {
                 }
             }
             
-            this.bookmarks[index] = { url, title };
+            const bookmark = { url, title };
+            if (description) {
+                bookmark.description = description;
+            }
+            
+            this.bookmarks[index] = bookmark;
             this.saveBookmarks();
             this.render();
             
@@ -232,13 +334,12 @@ class BookmarkManager {
         card.innerHTML = `
             <div class="card-content">
                 <h3 class="card-title">${this.escapeHtml(bookmark.title.toUpperCase())}</h3>
-                <p class="card-url">${this.escapeHtml(bookmark.url)}</p>
                 <div class="card-actions">
                     <button class="card-btn edit-btn" data-action="edit">
-                        <i class="fas fa-edit"></i> Edit
+                        <i class="fas fa-edit"></i>
                     </button>
                     <button class="card-btn delete-btn" data-action="delete">
-                        <i class="fas fa-trash"></i> Delete
+                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>
@@ -345,6 +446,7 @@ class BookmarkManager {
         document.getElementById('modalTitle').textContent = 'Add New Bookmark';
         document.getElementById('url').value = '';
         document.getElementById('title').value = '';
+        document.getElementById('description').value = '';
         document.getElementById('editIndex').value = '';
         document.getElementById('modal').style.display = 'block';
     }
@@ -356,6 +458,7 @@ class BookmarkManager {
         document.getElementById('modalTitle').textContent = 'Edit Bookmark';
         document.getElementById('url').value = bookmark.url;
         document.getElementById('title').value = bookmark.title;
+        document.getElementById('description').value = bookmark.description || '';
         document.getElementById('editIndex').value = index;
         document.getElementById('modal').style.display = 'block';
     }
@@ -364,6 +467,7 @@ class BookmarkManager {
     closeModal() {
         document.getElementById('modal').style.display = 'none';
         document.getElementById('deleteModal').style.display = 'none';
+        document.getElementById('todoModal').style.display = 'none';
     }
     
     // Submit form
@@ -371,13 +475,14 @@ class BookmarkManager {
         e.preventDefault();
         const url = document.getElementById('url').value.trim();
         const title = document.getElementById('title').value.trim();
+        const description = document.getElementById('description').value.trim();
         
         if (!url) return;
         
         if (this.editIndex === -1) {
-            this.addBookmark(url, title);
+            this.addBookmark(url, title, description);
         } else {
-            this.editBookmark(this.editIndex, url, title);
+            this.editBookmark(this.editIndex, url, title, description);
         }
         
         this.closeModal();
@@ -534,7 +639,10 @@ class BookmarkManager {
                             <div class="document-name">${this.escapeHtml(doc.name)}</div>
                             <div class="document-actions">
                                 <button class="todo-btn preview-toggle" data-doc-id="${doc.id}">
-                                    <i class="fas fa-eye"></i> Preview
+                                    <i class="fas fa-eye"></i> Info
+                                </button>
+                                <button class="todo-btn download-btn" data-doc-id="${doc.id}">
+                                    <i class="fas fa-download"></i>
                                 </button>
                                 <button class="todo-btn delete-doc-btn" data-doc-id="${doc.id}">
                                     <i class="fas fa-trash"></i>
@@ -542,7 +650,9 @@ class BookmarkManager {
                             </div>
                         </div>
                         <div class="document-preview" id="preview-${doc.id}" style="display: none;">
-                            <iframe class="document-preview-content" src="${doc.url}" frameborder="0"></iframe>
+                            <div class="preview-content" id="preview-content-${doc.id}">
+                                <p>Preview loading...</p>
+                            </div>
                             <button class="preview-toggle" data-doc-id="${doc.id}">
                                 <i class="fas fa-compress"></i> Minimize
                             </button>
@@ -580,20 +690,27 @@ class BookmarkManager {
     
     // Todo modal methods
     openAddTodoModal() {
-        // For simplicity, we'll just add a basic todo
-        const title = prompt('Enter todo title:');
-        if (title) {
-            this.addTodo(title);
-        }
+        // Clear the form
+        document.getElementById('todoModalTitle').textContent = 'Add New Todo';
+        document.getElementById('editTodoId').value = '';
+        document.getElementById('todoTitle').value = '';
+        document.getElementById('todoDescription').value = '';
+        
+        // Show the modal
+        document.getElementById('todoModal').style.display = 'block';
     }
     
     openEditTodoModal(todoId) {
         const todo = this.todos.find(t => t.id === todoId);
         if (todo) {
-            const newTitle = prompt('Edit todo title:', todo.title);
-            if (newTitle !== null) {
-                this.editTodo(todoId, newTitle, todo.notes, todo.documents);
-            }
+            // Populate the form
+            document.getElementById('todoModalTitle').textContent = 'Edit Todo';
+            document.getElementById('editTodoId').value = todoId;
+            document.getElementById('todoTitle').value = todo.title;
+            document.getElementById('todoDescription').value = todo.notes || '';
+            
+            // Show the modal
+            document.getElementById('todoModal').style.display = 'block';
         }
     }
     
@@ -612,7 +729,8 @@ class BookmarkManager {
                 id: Date.now() + i, // Simple ID generation
                 name: file.name,
                 url: fileUrl,
-                type: file.type
+                type: file.type,
+                size: file.size
             };
             
             if (!todo.documents) {
@@ -630,6 +748,23 @@ class BookmarkManager {
         const preview = document.getElementById(`preview-${docId}`);
         if (preview) {
             if (preview.style.display === 'none') {
+                // Find the document in our todos
+                let documentToPreview = null;
+                for (const todo of this.todos) {
+                    if (todo.documents) {
+                        const doc = todo.documents.find(d => d.id == docId);
+                        if (doc) {
+                            documentToPreview = doc;
+                            break;
+                        }
+                    }
+                }
+                
+                if (documentToPreview) {
+                    // Load the document content
+                    this.loadDocumentPreview(documentToPreview, docId);
+                }
+                
                 preview.style.display = 'block';
                 preview.classList.remove('minimized');
             } else {
@@ -646,6 +781,106 @@ class BookmarkManager {
             this.renderTodos();
             this.showNotification('Document deleted successfully!', 'success');
         }
+    }
+    
+    loadDocumentPreview(docData, docId) {
+        const previewContent = document.getElementById(`preview-content-${docId}`);
+        if (!previewContent) return;
+        
+        // Check if it's an image
+        if (docData.type && docData.type.startsWith('image/')) {
+            // Create image element to handle loading errors
+            const imgElement = document.createElement('img');
+            imgElement.src = docData.url;
+            imgElement.alt = this.escapeHtml(docData.name);
+            imgElement.style.maxWidth = '100%';
+            imgElement.style.maxHeight = '300px';
+            imgElement.style.objectFit = 'contain';
+            
+            // Handle image loading errors
+            imgElement.onerror = () => {
+                previewContent.innerHTML = `
+                    <div class="document-preview-info">
+                        <h4>${this.escapeHtml(docData.name)}</h4>
+                        <p>Type: ${docData.type || 'Unknown'}</p>
+                        <p>Size: ${(docData.size || 0) > 0 ? (docData.size / 1024).toFixed(2) + ' KB' : 'Unknown'}</p>
+                        <p><em>Image preview not available. The file may have been moved or the URL is no longer valid.</em></p>
+                        <p>To view this document, please download it or open it in your file explorer.</p>
+                    </div>
+                `;
+            };
+            
+            // Handle successful image loading
+            imgElement.onload = () => {
+                previewContent.innerHTML = ``;
+                previewContent.appendChild(imgElement);
+                
+                // Add document info below the image
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'document-preview-info';
+                infoDiv.innerHTML = `
+                    <h4>${this.escapeHtml(docData.name)}</h4>
+                    <p>Type: ${docData.type || 'Unknown'}</p>
+                    <p>Size: ${(docData.size || 0) > 0 ? (docData.size / 1024).toFixed(2) + ' KB' : 'Unknown'}</p>
+                `;
+                previewContent.appendChild(infoDiv);
+            };
+            
+            // In case the image loads synchronously (cached)
+            if (imgElement.complete) {
+                previewContent.innerHTML = ``;
+                previewContent.appendChild(imgElement);
+                
+                // Add document info below the image
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'document-preview-info';
+                infoDiv.innerHTML = `
+                    <h4>${this.escapeHtml(docData.name)}</h4>
+                    <p>Type: ${docData.type || 'Unknown'}</p>
+                    <p>Size: ${(docData.size || 0) > 0 ? (docData.size / 1024).toFixed(2) + ' KB' : 'Unknown'}</p>
+                `;
+                previewContent.appendChild(infoDiv);
+            }
+        } 
+        // Check if it's a text file
+        else if (docData.type && (docData.type.startsWith('text/') || docData.type.includes('json') || docData.type.includes('xml'))) {
+            // For text files, we could try to fetch and display content
+            // But due to browser security restrictions, we can only show file info
+            previewContent.innerHTML = `
+                <div class="document-preview-info">
+                    <h4>${this.escapeHtml(docData.name)}</h4>
+                    <p>Type: ${docData.type || 'Unknown'}</p>
+                    <p>Size: ${(docData.size || 0) > 0 ? (docData.size / 1024).toFixed(2) + ' KB' : 'Unknown'}</p>
+                    <p><em>Text preview not available due to browser security restrictions.</em></p>
+                    <p>To view this document, please download it or open it in your file explorer.</p>
+                </div>
+            `;
+        }
+        // For other file types
+        else {
+            previewContent.innerHTML = `
+                <div class="document-preview-info">
+                    <h4>${this.escapeHtml(docData.name)}</h4>
+                    <p>Type: ${docData.type || 'Unknown'}</p>
+                    <p>Size: ${(docData.size || 0) > 0 ? (docData.size / 1024).toFixed(2) + ' KB' : 'Unknown'}</p>
+                    <p><em>Preview not available for this file type.</em></p>
+                    <p>To view this document, please download it or open it in your file explorer.</p>
+                </div>
+            `;
+        }
+    }
+    
+    downloadDocument(todoId, docId) {
+        // Find the document
+        const todo = this.todos.find(t => t.id === todoId);
+        if (!todo || !todo.documents) return;
+        
+        const document = todo.documents.find(d => d.id == docId);
+        if (!document) return;
+        
+        // Note: We can't actually download the file directly since we only have a blob URL
+        // In a real application, you would store the actual file data
+        this.showNotification('Download functionality would be implemented in a production environment', 'info');
     }
     
     // Calculator methods
@@ -752,7 +987,12 @@ class BookmarkManager {
     convertUnits() {
         const inputValue = parseFloat(document.querySelector('.conversion-input').value);
         if (isNaN(inputValue)) {
-            this.showNotification('Please enter a valid number', 'error');
+            // Clear output if input is invalid
+            document.querySelector('.conversion-output').value = '';
+            const conversionDisplay = document.querySelector('.conversion-display');
+            if (conversionDisplay) {
+                conversionDisplay.textContent = '';
+            }
             return;
         }
         
@@ -790,6 +1030,52 @@ class BookmarkManager {
         }
     }
     
+    convertUnitsReverse() {
+        const outputValue = parseFloat(document.querySelector('.conversion-output').value);
+        if (isNaN(outputValue)) {
+            // Clear input if output is invalid
+            document.querySelector('.conversion-input').value = '';
+            const conversionDisplay = document.querySelector('.conversion-display');
+            if (conversionDisplay) {
+                conversionDisplay.textContent = '';
+            }
+            return;
+        }
+        
+        const fromUnit = document.querySelector('.conversion-from').value;
+        const toUnit = document.querySelector('.conversion-to').value;
+        
+        // Conversion factors to meters
+        const conversionFactors = {
+            'cm': 0.01,
+            'in': 0.0254,
+            'm': 1,
+            'ft': 0.3048,
+            'km': 1000,
+            'mi': 1609.344
+        };
+        
+        // Convert output to meters first, then to input unit
+        const valueInMeters = outputValue * conversionFactors[toUnit];
+        const result = valueInMeters / conversionFactors[fromUnit];
+        
+        document.querySelector('.conversion-input').value = result.toFixed(6);
+        
+        // Update conversion display
+        const conversionDisplay = document.querySelector('.conversion-display');
+        if (conversionDisplay) {
+            const unitNames = {
+                'cm': 'cm',
+                'in': 'in',
+                'm': 'm',
+                'ft': 'ft',
+                'km': 'km',
+                'mi': 'mi'
+            };
+            conversionDisplay.textContent = `${result.toFixed(6)} ${unitNames[fromUnit]} = ${outputValue} ${unitNames[toUnit]}`;
+        }
+    }
+    
 
     
     // Switch tabs
@@ -799,16 +1085,22 @@ class BookmarkManager {
             tab.classList.remove('active');
         });
         
-        // Remove active class from all tab buttons
-        document.querySelectorAll('.tab-btn').forEach(btn => {
+        // Remove active class from all tab buttons (both top and side)
+        document.querySelectorAll('.tab-btn, .side-tab-btn').forEach(btn => {
             btn.classList.remove('active');
         });
         
         // Show selected tab content
         document.getElementById(`${tabName}Tab`).classList.add('active');
         
-        // Set active class on clicked tab button
+        // Set active class on clicked tab button (both top and side)
         document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // Also set active class on corresponding side menu button
+        const sideTabButton = document.querySelector(`.side-tab-btn[data-tab="${tabName}"]`);
+        if (sideTabButton) {
+            sideTabButton.classList.add('active');
+        }
         
         // Re-render todos when switching to todo tab
         if (tabName === 'todo') {
@@ -1012,6 +1304,30 @@ class BookmarkManager {
             this.openAddTodoModal();
         });
         
+        // Todo Modal functionality
+        document.getElementById('todoForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const title = document.getElementById('todoTitle').value.trim();
+            const notes = document.getElementById('todoDescription').value.trim();
+            const editTodoId = document.getElementById('editTodoId').value;
+            
+            if (title) {
+                if (editTodoId) {
+                    // Editing existing todo
+                    this.editTodo(parseInt(editTodoId), title, notes);
+                } else {
+                    // Adding new todo
+                    this.addTodo(title, notes);
+                }
+                this.closeModal();
+            }
+        });
+        
+        document.getElementById('cancelTodoBtn').addEventListener('click', () => {
+            this.closeModal();
+        });
+        
         // Todo List event delegation
         document.getElementById('todoList').addEventListener('click', (e) => {
             const todoItem = e.target.closest('.todo-item');
@@ -1056,6 +1372,12 @@ class BookmarkManager {
                 this.toggleDocumentPreview(docId);
             }
             
+            // Download document
+            if (e.target.closest('.download-btn')) {
+                const docId = e.target.closest('.download-btn').dataset.docId;
+                this.downloadDocument(todoId, docId);
+            }
+            
             // Delete document
             if (e.target.closest('.delete-doc-btn')) {
                 const docId = e.target.closest('.delete-doc-btn').dataset.docId;
@@ -1071,19 +1393,14 @@ class BookmarkManager {
         });
         
         // Load configuration
-        const loadConfigInput = document.createElement('input');
-        loadConfigInput.type = 'file';
-        loadConfigInput.id = 'loadConfigInput';
-        loadConfigInput.accept = '.json';
-        loadConfigInput.style.display = 'none';
-        document.body.appendChild(loadConfigInput);
-        
         document.getElementById('loadConfigBtn').addEventListener('click', () => {
-            loadConfigInput.click();
+            document.getElementById('configFileInput').click();
         });
         
-        loadConfigInput.addEventListener('change', (e) => {
+        document.getElementById('configFileInput').addEventListener('change', (e) => {
             this.loadConfiguration(e);
+            // Reset the input to allow selecting the same file again
+            e.target.value = '';
         });
         
 
@@ -1092,7 +1409,64 @@ class BookmarkManager {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 this.closeModal();
+                
+                // Also close side menu with Escape key
+                const sideMenu = document.getElementById('sideMenu');
+                if (sideMenu && sideMenu.classList.contains('open')) {
+                    sideMenu.classList.remove('open');
+                }
             }
+        });
+        
+        // Side menu functionality
+        const menuToggle = document.getElementById('menuToggle');
+        const closeMenu = document.getElementById('closeMenu');
+        const sideMenu = document.getElementById('sideMenu');
+        
+        if (menuToggle) {
+            menuToggle.addEventListener('click', () => {
+                if (sideMenu) {
+                    sideMenu.classList.add('open');
+                }
+            });
+        }
+        
+        if (closeMenu) {
+            closeMenu.addEventListener('click', () => {
+                if (sideMenu) {
+                    sideMenu.classList.remove('open');
+                }
+            });
+        }
+        
+        // Close side menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (sideMenu && sideMenu.classList.contains('open')) {
+                if (!sideMenu.contains(e.target) && e.target !== menuToggle) {
+                    sideMenu.classList.remove('open');
+                }
+            }
+        });
+        
+        // Side menu tab switching
+        const sideTabButtons = document.querySelectorAll('.side-tab-btn');
+        sideTabButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // Remove active class from all side tab buttons
+                sideTabButtons.forEach(b => b.classList.remove('active'));
+                
+                // Add active class to clicked button
+                e.target.classList.add('active');
+                
+                // Switch to the corresponding tab
+                const tabName = e.target.dataset.tab;
+                this.switchTab(tabName);
+                
+                // Close the side menu after switching tabs
+                if (sideMenu) {
+                    sideMenu.classList.remove('open');
+                }
+            });
         });
         
         // Calculator functionality
@@ -1123,10 +1497,33 @@ class BookmarkManager {
             });
         }
         
-        // Unit conversion
-        const convertBtn = document.querySelector('.convert-btn');
-        if (convertBtn) {
-            convertBtn.addEventListener('click', () => {
+        // Unit conversion - automatic calculation when fields change
+        const conversionInput = document.querySelector('.conversion-input');
+        const conversionOutput = document.querySelector('.conversion-output');
+        const conversionFrom = document.querySelector('.conversion-from');
+        const conversionTo = document.querySelector('.conversion-to');
+        
+        if (conversionInput) {
+            conversionInput.addEventListener('input', () => {
+                this.convertUnits();
+            });
+        }
+        
+        if (conversionOutput) {
+            conversionOutput.addEventListener('input', () => {
+                // Convert backwards - from output to input
+                this.convertUnitsReverse();
+            });
+        }
+        
+        if (conversionFrom) {
+            conversionFrom.addEventListener('change', () => {
+                this.convertUnits();
+            });
+        }
+        
+        if (conversionTo) {
+            conversionTo.addEventListener('change', () => {
                 this.convertUnits();
             });
         }
